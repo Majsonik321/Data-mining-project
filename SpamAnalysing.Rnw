@@ -1,0 +1,77 @@
+\documentclass[12pt, a4paper]{article}
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\usepackage[OT4]{polski}
+\usepackage[utf8]{inputenc}
+\usepackage[top=2.5cm, bottom=2.5cm, left=2cm, right=2cm]{geometry}
+\usepackage{graphicx}
+\usepackage{float}
+\usepackage[colorlinks=true, linkcolor=blue]{hyperref}
+\usepackage{enumerate}
+\usepackage{bbm}
+\usepackage{polski}
+\usepackage{mathtools,amsthm,amssymb}
+\usepackage{amsmath}
+\mathtoolsset{mathic}
+\newcommand{\RomanNumeralCaps}[1]{\MakeUppercase{\romannumeral #1}}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+<<ustawienia_globalne,echo=FALSE, eval=TRUE, warning=FALSE, message=FALSE>>=
+library(ggplot2)
+library(kableExtra)
+library(tidyverse)
+library(dplyr)
+library(Epi)
+library(kernlab)
+library(knitr)
+opts_chunk$set(fig.path='figure/', fig.align='center', fig.pos='H',fig.width=7, fig.height=5)
+@
+
+\begin{document}
+%\SweaveOpts{concordance=TRUE}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\title{Formatowanie spamu \\ Data Mining}
+\author{Michał Maj i Anna Mieszkalska \\album 256556 i 255699}
+\maketitle
+\tableofcontents
+
+\newpage
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Analiza opisowa i wizualizacja.}
+W naszym projekcie będziemy analizować dane o nazwie \textit{Spambase} z biblioteki \textit{kernlab}. Zestaw danych \textit{spambase} jest zbiorem wiadomości e-mail, które zostały przeanalizowane i sklasyfikwoane jako spam lub non-spam. Celem tego zbioru danych jest dostarczenie użytecznych materiałów potrzebnych do analiz i eksploracji w tym zakresie. W tym projekcie użyjemy różnych metod i technik pozyskiwania wiedzy, aby przeanalizować dane \textit{spambase} w celu opracowania modelu klasyfikującego wiadomości e-mail jako spam lub non-spam. Modele opracowane w tym projekcie mogą być przydatne w rzeczywistych serwisach poczt e-mailowych, gdzie problem dostarczania niechcianych wiadomości jest nam powrzechnie znany. %ostatnie zdanie meh trzeba poprawic
+<<dane, echo=T, eval=T>>=
+#format
+
+#Pierwsze 48 zmiennych zawiera częstotliwość występowania nazwy zmiennej (np. biznes) w e-mailu. Jeśli nazwa zmiennej zaczyna się od liczby (np. num650),
+#oznacza to częstotliwość odpowiadającej jej liczby (np. 650). Zmienne 49-54 wskazują częstotliwość występowania znaków „;”, „(”, „[”, „!”, „$” i „#”.
+#Zmienne 55-57 zawierają średnią, najdłuższą i całkowitą długość wielkich liter Zmienna 58 wskazuje typ maila i jest to „nonspam” lub „spam”, tj. niechciana komercyjna wiadomość e-mail.
+
+
+
+#dane
+data(spam)
+
+#pierwsze 10 wyników
+head(spam)
+
+#liczba maili
+nrow(spam)
+View(spam)
+#ile spamów i non-spamów
+table(spam$type)
+@
+
+<<tabela_spam, echo = FALSE, eval = TRUE, results='asis'>>=
+part <- spam %>% select(make:mail, charRoundbracket ,type)
+kbl(head(part), caption = "Database - pierwsze 14 rekordów.") %>% kable_styling(bootstrap_options = "striped", full_width = F, position = "center",latex_options = "HOLD_position",font_size = 9)
+#do poprawy wyglad tabeli i nazwa i label
+@
+Tabela \ref{tab:tabela_spam}
+
+<<summary, echo=T, eval=T>>=
+summary(spam)
+@
+
+\end{document}
