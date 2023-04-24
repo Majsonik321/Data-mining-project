@@ -24,6 +24,7 @@ library(dplyr)
 library(Epi)
 library(kernlab)
 library(knitr)
+library(corrplot)
 opts_chunk$set(fig.path='figure/', fig.align='center', fig.pos='H',fig.width=7, fig.height=5)
 @
 
@@ -39,39 +40,70 @@ opts_chunk$set(fig.path='figure/', fig.align='center', fig.pos='H',fig.width=7, 
 \newpage
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-\section{Analiza opisowa i wizualizacja.}
+\section{Analiza opisowa i wizualizacja}
+\subsection{Wstęp}
 W naszym projekcie będziemy analizować dane o nazwie \textit{Spambase} z biblioteki \textit{kernlab}. Zestaw danych \textit{spambase} jest zbiorem wiadomości e-mail, które zostały przeanalizowane i sklasyfikwoane jako spam lub non-spam. Celem tego zbioru danych jest dostarczenie użytecznych materiałów potrzebnych do analiz i eksploracji w tym zakresie. W tym projekcie użyjemy różnych metod i technik pozyskiwania wiedzy, aby przeanalizować dane \textit{spambase} w celu opracowania modelu klasyfikującego wiadomości e-mail jako spam lub non-spam. Modele opracowane w tym projekcie mogą być przydatne w rzeczywistych serwisach poczt e-mailowych, gdzie problem dostarczania niechcianych wiadomości jest nam powrzechnie znany. %ostatnie zdanie meh trzeba poprawic
-<<dane, echo=T, eval=T>>=
+
+\subsection{Opis danych}
+Zbiór danych \textit{spambase} wyodrębnia 58 cech, które oznaczają częstość występowania danego znaku bądź słowa w jednym e-mailu. Pierwsze 48 zmiennych dotyczy występowania konkretnych słów, następne 6 występowania znaków, a kolumny 55-57 dotyczą średniej, najdłuższej i całkowitej długości wielkich liter. Ostatnia zmienna \textit{type} odpowiada za określenie typu e-maila jako spam lub non-spam, zatem będziemy rozważać dwie klasy %tak?. 
+Zbiór ten składa się z 4601 obserwacji (wiadomości e-mail).
+%tu dać ładną przykładową tabelke przykładową z tymi danymi
+<<dane, echo=F, eval=T>>=
 #format
 
 #Pierwsze 48 zmiennych zawiera częstotliwość występowania nazwy zmiennej (np. biznes) w e-mailu. Jeśli nazwa zmiennej zaczyna się od liczby (np. num650),
 #oznacza to częstotliwość odpowiadającej jej liczby (np. 650). Zmienne 49-54 wskazują częstotliwość występowania znaków „;”, „(”, „[”, „!”, „$” i „#”.
 #Zmienne 55-57 zawierają średnią, najdłuższą i całkowitą długość wielkich liter Zmienna 58 wskazuje typ maila i jest to „nonspam” lub „spam”, tj. niechciana komercyjna wiadomość e-mail.
 
-
-
 #dane
 data(spam)
 
 #pierwsze 10 wyników
-head(spam)
+#head(spam)
 
 #liczba maili
-nrow(spam)
+#row(spam)
+
 View(spam)
-#ile spamów i non-spamów
-table(spam$type)
+#typ zmiennych
+#str(spam)
+
+#summary(spam)
+
+#sprawdzanie czy są wartości NA
+#sum(is.na(spam))
 @
 
-<<tabela_spam, echo = FALSE, eval = TRUE, results='asis'>>=
+<<tabela_spam, echo = FALSE, eval = FALSE, results='asis'>>=
 part <- spam %>% select(make:mail, charRoundbracket ,type)
 kbl(head(part), caption = "Database - pierwsze 14 rekordów.") %>% kable_styling(bootstrap_options = "striped", full_width = F, position = "center",latex_options = "HOLD_position",font_size = 9)
 #do poprawy wyglad tabeli i nazwa i label
 @
-Tabela \ref{tab:tabela_spam}
 
-<<summary, echo=T, eval=T>>=
-summary(spam)
+<<rozkład_klas, echo=F, eval=T>>=
+#tu ładniej zrobic lepsze nazwy kolumn  i lepsza nazwe tabeli
+#counting spam and non-spam
+count_spam <- table(spam$type)
+kbl(count_spam, caption = "Rozkład klas.") %>% kable_styling(bootstrap_options = "striped", full_width = F, position = "center",latex_options = "HOLD_position",font_size = 9)
+ggplot(spam, aes(x = type)) + geom_bar()
 @
+
+Ilość e-maili, które zostały sklasyfikowane jako spam wynosi 1813 (tabela \ref{tab:rozkład_klas}), a ilość tych, które nie są spamem wynosi 2733, zatem klasa spam stanowi prawie $40\%$ całości, więc dane są dość zbalansowane%ref do rysunku. %też nieładnie jakoś
+
+Za pomocą funkcji \texttt{str} mamy, że wszystkie zmienne są typu \textit{numeric}, oczywiście oprócz zmiennej \textit{type}, która jest typu \textit{factor}. Patrząc do tabeli \ref{tab:tabela_spam} widzimy, że wszystkie typy zmiennych zostały określone prawidłowo. Funkcja \texttt{is.na()} mówi nam, że nasze dane nie posiadają żadnych wartości NA, należy jednak sprawdzić, czy w tym przypadku nie są one kodowane inaczej.
+<<echo=F, eval=T>>=
+corrplot(cor(spam[1:57]))
+#var(spam)
+@
+
+Podsumowując, mamy:
+\begin{itemize}
+
+\item $n = 4601$ (liczba przypadków),
+\item $p = 58$ (liczba cech),
+\item $K = 2$ (licza klas),
+\item 0 wartości brakujących %chyba że są inaczej kodowane to nie sprawdzałam
+
+\end{itemize}
 
 \end{document}
