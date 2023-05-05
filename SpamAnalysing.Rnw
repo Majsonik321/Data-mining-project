@@ -18,18 +18,24 @@
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 <<ustawienia_globalne,echo=FALSE, eval=TRUE, warning=FALSE, message=FALSE>>=
 library(ggplot2)
+library(dlookr)
 library(kableExtra)
 library(tidyverse)
 library(dplyr)
 library(Epi)
 library(kernlab)
 library(knitr)
+library(xtable)
+library(cowplot)
 library(corrplot)
+library(MASS)
+library(caret)
+library(pROC)
+require(gridExtra)
 opts_chunk$set(fig.path='figure/', fig.align='center', fig.pos='H',fig.width=7, fig.height=5)
 @
 
 \begin{document}
-%\SweaveOpts{concordance=TRUE}
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \title{Formatowanie spamu \\ Data Mining}
@@ -42,13 +48,13 @@ opts_chunk$set(fig.path='figure/', fig.align='center', fig.pos='H',fig.width=7, 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \section{Analiza opisowa i wizualizacja}
 \subsection{Wstęp}
-W naszym projekcie będziemy analizować dane o nazwie \textit{Spambase} z biblioteki \textit{kernlab}. Zestaw danych \textit{spambase} jest zbiorem wiadomości e-mail, które zostały przeanalizowane i sklasyfikwoane jako spam lub non-spam. Celem tego zbioru danych jest dostarczenie użytecznych materiałów potrzebnych do analiz i eksploracji w tym zakresie. W tym projekcie użyjemy różnych metod i technik pozyskiwania wiedzy, aby przeanalizować dane \textit{spambase} w celu opracowania modelu klasyfikującego wiadomości e-mail jako spam lub non-spam. Modele opracowane w tym projekcie mogą być przydatne w rzeczywistych serwisach poczt e-mailowych, gdzie problem dostarczania niechcianych wiadomości jest nam powrzechnie znany. %ostatnie zdanie meh trzeba poprawic
+W naszym projekcie będziemy analizować dane o nazwie \textit{Spambase} z biblioteki \textit{kernlab}. Zestaw danych \textit{spambase} jest zbiorem wiadomości e-mail, które zostały przeanalizowane i sklasyfikwane jako spam lub non-spam. Celem tego zbioru danych jest dostarczenie użytecznych materiałów potrzebnych do analiz i eksploracji w tym zakresie. W tym projekcie użyjemy różnych metod i technik pozyskiwania wiedzy, aby przeanalizować dane \textit{spambase} w celu opracowania modelu klasyfikującego wiadomości e-mail jako spam lub non-spam. Modele opracowane w tym projekcie mogą być przydatne w rzeczywistych serwisach poczt e-mailowych, gdzie problem dostarczania niechcianych wiadomości jest nam powszechnie znany. %ostatnie zdanie meh trzeba poprawic
 
 \subsection{Opis danych}
-Zbiór danych \textit{spambase} wyodrębnia 58 cech, które oznaczają częstość występowania danego znaku bądź słowa w jednym e-mailu. Pierwsze 48 zmiennych dotyczy występowania konkretnych słów, następne 6 występowania znaków, a kolumny 55-57 dotyczą średniej, najdłuższej i całkowitej długości wielkich liter. Ostatnia zmienna \textit{type} odpowiada za określenie typu e-maila jako spam lub non-spam, zatem będziemy rozważać dwie klasy %tak?. 
+Zbiór danych \textit{spambase} wyodrębnia 58 cech, które oznaczają częstość występowania danego znaku bądź słowa w jednym e-mailu. Pierwsze 48 zmiennych dotyczy występowania konkretnych słów, następne 6 występowania znaków, a kolumny 55-57 dotyczą średniej, najdłuższej i całkowitej długości wielkich liter. Ostatnia zmienna \textit{type} odpowiada za określenie typu e-maila jako spam lub non-spam, zatem będziemy rozważać dwie klasy. 
 Zbiór ten składa się z 4601 obserwacji (wiadomości e-mail).
-%tu dać ładną przykładową tabelke przykładową z tymi danymi
-<<dane, echo=F, eval=T>>=
+%tu dać ładną przykładową tabelkę z tymi danymi
+<<dane, echo=F, eval=T, results='hide'>>=
 #format
 
 #Pierwsze 48 zmiennych zawiera częstotliwość występowania nazwy zmiennej (np. biznes) w e-mailu. Jeśli nazwa zmiennej zaczyna się od liczby (np. num650),
@@ -64,46 +70,397 @@ data(spam)
 #liczba maili
 #row(spam)
 
-View(spam)
+#View(spam)
+
 #typ zmiennych
 #str(spam)
-
+colnames(spam)
 #summary(spam)
 
 #sprawdzanie czy są wartości NA
 #sum(is.na(spam))
+
+#lub drugi sposób
+
+#any(is.na(spam))
+
+#zmiana nazw kolumn 49-54
+spam <- spam %>% 
+        rename(",,;''" = "charSemicolon",
+               ",,(''" = "charRoundbracket",
+               ",,[''" = "charSquarebracket",
+               ",,!''" = "charExclamation",
+               ",,$''" = "charDollar",
+               ",,#''" = "charHash")
 @
 
-<<tabela_spam, echo = FALSE, eval = FALSE, results='asis'>>=
-part <- spam %>% select(make:mail, charRoundbracket ,type)
-kbl(head(part), caption = "Database - pierwsze 14 rekordów.") %>% kable_styling(bootstrap_options = "striped", full_width = F, position = "center",latex_options = "HOLD_position",font_size = 9)
-#do poprawy wyglad tabeli i nazwa i label
+<<tabela_spam, echo=FALSE, eval=TRUE, results='asis'>>=
+#druga przykładowa tabelka
+part <- spam[c(1:10,50,58)]
+part <- xtable(part, 
+               digits = 3, 
+               row.names = FALSE, 
+               caption = "Database - pierwsze 14 rekordów.", 
+               label = "tab:part")
+align(part) <- "c|c|c|c|c|c|c|c|c|c|c|c|c"
+print(part[1:14,], type = "latex", table.placement = "H",sanitize.text.function=function(x){x}, scalebox = 0.9)
 @
 
 <<rozkład_klas, echo=F, eval=T>>=
-#tu ładniej zrobic lepsze nazwy kolumn  i lepsza nazwe tabeli
 #counting spam and non-spam
 count_spam <- table(spam$type)
-kbl(count_spam, caption = "Rozkład klas.") %>% kable_styling(bootstrap_options = "striped", full_width = F, position = "center",latex_options = "HOLD_position",font_size = 9)
-ggplot(spam, aes(x = type)) + geom_bar()
+kbl(count_spam, caption = "Rozkład klas.",col.names = c('type','ilość')) %>% kable_styling(bootstrap_options = "striped", full_width = F, position = "center",latex_options = "HOLD_position",font_size = 12)
 @
 
-Ilość e-maili, które zostały sklasyfikowane jako spam wynosi 1813 (tabela \ref{tab:rozkład_klas}), a ilość tych, które nie są spamem wynosi 2733, zatem klasa spam stanowi prawie $40\%$ całości, więc dane są dość zbalansowane%ref do rysunku. %też nieładnie jakoś
-
-Za pomocą funkcji \texttt{str} mamy, że wszystkie zmienne są typu \textit{numeric}, oczywiście oprócz zmiennej \textit{type}, która jest typu \textit{factor}. Patrząc do tabeli \ref{tab:tabela_spam} widzimy, że wszystkie typy zmiennych zostały określone prawidłowo. Funkcja \texttt{is.na()} mówi nam, że nasze dane nie posiadają żadnych wartości NA, należy jednak sprawdzić, czy w tym przypadku nie są one kodowane inaczej.
-<<echo=F, eval=T>>=
-corrplot(cor(spam[1:57]))
-#var(spam)
+<<rozkład_klas_plot,echo=FALSE, eval=TRUE, fig.pos="H", fig.align="center", out.extra="", fig.height=4, fig.width=6, fig.cap= "Wykres rozkładu klas">>=
+ggplot(spam, aes(x = type, fill = type)) + geom_bar()
 @
+
+<<rozkład_klas_procent, echo=F, eval=T>>=
+kbl(round(prop.table(table(spam$type))*100, 2), caption = "Rozkład klas (procentowo).",col.names = c('type','procent')) %>% kable_styling(bootstrap_options = "striped", full_width = F, position = "center",latex_options = "HOLD_position",font_size = 12)
+@
+
+Ilość e-maili, które zostały sklasyfikowane jako spam wynosi 1813 (tabela \ref{tab:rozkład_klas}), a ilość tych, które nie są spamem wynosi 2733, zatem klasa spam stanowi prawie $40\%$ całości \ref{tab:rozkład_klas_procent}, więc dane są dość zbalansowane %ref do rysunku. %też nieładnie jakoś
+
+Za pomocą funkcji \texttt{str} mamy, że wszystkie zmienne są typu \textit{numeric}, oczywiście oprócz zmiennej \textit{type}, która jest typu \textit{factor}. Możemy również sprawdzić typ zmiennych za pomocą funkcji \texttt{sapply} i zliczyć ich ilość. Otrzymamy wynik 57 bez zmiennej \textit{type}. 
+
+<<typ_zmiennych, echo=T, eval=T>>=
+sum(sapply(spam,is.numeric))
+@
+
+Patrząc do tabeli \ref{tab:part} widzimy, że wszystkie typy zmiennych zostały określone prawidłowo. Funkcja \texttt{is.na()} mówi nam, że nasze dane nie posiadają żadnych wartości NA, należy jednak sprawdzić, czy w tym przypadku nie są one kodowane inaczej. Możemy użyć funkcji \texttt{complete.cases}, żeby usunąć wszelkie brakujące wartości.
+
+<<brakujace_wartosci, echo=T, eval=T>>=
+sum(!complete.cases(spam))
+@
+Wynik wyszedł $0$, zatem nasze dane nie mają żadnych brakujących wartości oraz niestandardowego kodowania.
 
 Podsumowując, mamy:
 \begin{itemize}
 
 \item $n = 4601$ (liczba przypadków),
 \item $p = 58$ (liczba cech),
-\item $K = 2$ (licza klas),
-\item 0 wartości brakujących %chyba że są inaczej kodowane to nie sprawdzałam
+\item $K = 2$ (licza klas, ,,spam'' i ,,nonspam''),
+\item 0 wartości brakujących 
 
 \end{itemize}
+
+\subsection{Przygotowanie danych do analizy}
+Przed analizą poszczególnych zmiennych należy znormalizować dane, ponieważ są nierównomiernie rozłożone. Zostały one znormalizowane przy użyciu własnoręcznie zaimplementowanej funkcji \texttt{normalize}, tak aby wszystkie wartości liczbowe mieściły się w przedziale od $0$ do $1$.
+
+<<normalizowanie_wartosci, echo=T, eval=T>>=
+normalize <- function(x) {
+        return( (x - min(x)) / (max(x) - min(x)))
+}
+NormalizeSpam <- as.data.frame(lapply(spam[1:57], normalize))
+
+#Cleaning Data - dodanie kolumny type (naszej klasy)
+CleanSpam <- cbind(spam[, 58], NormalizeSpam)
+names(CleanSpam)[names(CleanSpam) == "spam[, 58]"] <- "class"
+CleanSpam$class <- as.character(CleanSpam$class)
+
+#usytuowanie zmiennej class na sam koniec
+CleanSpam <- CleanSpam %>% relocate(class, .after=capitalTotal)
+@
+
+<<zamiana_nazw_kolumn, echo=F, eval=T>>=
+#zmiana nazw kolumn 49-54
+CleanSpam <- CleanSpam %>% 
+        rename(",,;''" = "X.....",
+               ",,(''" = "X......1",
+               ",,[''" = "X......2",
+               ",,!''" = "X......3",
+               ",,$''" = "X......4",
+               ",,#''" = "X......5")
+@
+
+W poprzedniej sekcji pokazaliśmy, że nie ma żadnych brakujących wartości. Musimy również usunąć obserwacje zduplikowane, za pomocą funkcji \texttt{distinct} z pakietu \textit{dplyr}. 
+
+<<zduplikowane_wartosci, echo=T, eval=T>>=
+CleanSpam <- CleanSpam %>% distinct()
+nrow(spam)-nrow(CleanSpam) #różnica w ilości rekordów po usunięciu duplikatów
+@
+Widzimy, że ilość obserwacji zmniejszyła się i wynosi aktualnie \Sexpr{nrow(CleanSpam)}. 
+
+Jeżeli chodzi o zmienność cech to jest ona bardzo mała co prezentuje poniższa tabela.
+
+<<wariancja,echo=FALSE, eval=TRUE,results='asis'>>=
+var_spam <- CleanSpam[c(1:10,50)]
+var_matrix <- var(var_spam)  
+var_matrix <- xtable(var_matrix, 
+               digits = 5, 
+               row.names = FALSE, 
+               caption = "Wariancja poszczególnych zmiennych", 
+               label = "tab:var")
+align(var_matrix) <- "c|c|c|c|c|c|c|c|c|c|c|c"
+print(var_matrix, type = "latex", table.placement = "H",sanitize.text.function=function(x){x}, scalebox = 0.75)
+@
+Podobnie to się prezentuje jeśli chodzi o resztę zmiennych, zatem nie możemy usunąć cech o zbyt małej zmienności.
+
+\subsection{Analiza poszczególnych zmiennych}
+W tej sekcji zajmiemy się wskaźnikami sumarycznymi czyli między innymi miarami położenia i rozrzutu, wyznaczonymi dla wszystkich danych.
+
+Wiemy, że wszystkie zmienne oprócz \textit{type} są ilościowe zatem możemy użyć funkcji \texttt{describe} z pakietu \textit{dlookr}, żeby zobaczyć statystyki opisowe.
+<<wskazniki_sumaryczne,echo=FALSE, eval=TRUE,results='asis'>>=
+kbl(describe(CleanSpam)[c(1:9,15,18,21)], caption = "Wskaźniki sumaryczne dla wszystkich zmiennych",digits = 4) %>% kable_styling(bootstrap_options = "striped", full_width = F, position = "center",latex_options = "HOLD_position",font_size = 7.6)
+@
+Widzimy w tabeli \ref{tab:wskazniki_sumaryczne}, że w danych występuje $4210$ obserwacji oraz $0$ wartości brakujących. Jeżeli chodzi o średnią, odchylenie standardowe, błąd standardowy średniej czy rozstęp międzykwartylowy (IQR) to osiągane są dość niskie wyniki dla każdej zmiennej. Podobnie możemy powiedzieć o wartościach osiąganych przez kwartyl pierwszy, drugi i trzeci. Inaczej to się ma jeśli chodzi o skośność gdzie osiągane są wysokie wyniki powyżej zera, co świadczy o prawostronnej asymetrii rozkładu zmiennych. Jeżeli chodzi o wartości kurtozy to są one największe spośród wszystkich wskaźników sumarycznych wymienionych w tabeli \ref{tab:wskazniki_sumaryczne} i mówią o tym, że rozkład zmiennych jest bardziej wysmukły niż normalny (rozkład leptokurtyczny), czyli mają większe skupienie wartości wokół średniej.
+
+\subsection{Analiza zależności (korelacji) między zmiennymi}
+W tej sekcji zajmiemy się rysowaniem podstawowych wykresów takich jak histogramy, wykresy rozrzutu, wykresy pudełkowe, macierze korelacji czy estymatory jądrowe gęstości.
+
+Na począte tworzymy macierz korelacji, żeby zobaczyć jak prezentują się zależności między zmiennymi.
+
+<<macierz_korelacji,echo=FALSE, eval=TRUE, fig.pos="H", fig.align="center", out.extra="", fig.height=4, fig.width=6, fig.cap= "Macierz korelacji zmiennych">>=
+corrplot(cor(CleanSpam[1:57]), tl.cex = 0.4)
+@
+
+Widzimy, że w większości zmienne nie są ze sobą powiązane, jednak wyodrębnimy te, dla których wysoka zależność jest widoczna na wykresie \ref{fig:macierz_korelacji}. Wybierzemy wartości korelacji zmiennych, dla których wartość bezwzględna współczynnika korelacji jest wyższa niż $0.55$ .
+<<macierz_korelacji2,echo=FALSE, eval=TRUE, fig.pos="H", fig.align="center", out.extra="", fig.height=4, fig.width=6, fig.cap= "Macierz korelacji poszczególnych zmiennych">>=
+cor_matrix <- cor(CleanSpam[1:57])                     
+
+#modyfikujemy
+cor_matrix_rm <- cor_matrix  
+diag(cor_matrix_rm) <- 0
+
+#usuwamy kolumny poniżej wartości współczynnika korelacji 0.55
+cor_matrix_rm_new <- CleanSpam[ , apply(cor_matrix_rm,2,function(x) any(abs(x) > 0.55))]
+names <- names(which(apply(cor_matrix_rm,2,function(x) any(abs(x) > 0.55))))
+corrplot(cor(CleanSpam[names]))
+@
+Dla lepszego zobrazowania na rysunku \ref{fig:macierz_korelacji3} przedstawione są dokładne wartości współczynnika korelacji, które są osiągane na rysunku \ref{fig:macierz_korelacji2}.
+
+<<macierz_korelacji3,echo=FALSE, eval=TRUE, fig.pos="H", fig.align="center", out.extra="", fig.height=4, fig.width=6, fig.cap= "Macierz korelacji poszczególnych zmiennych z widocznymi wartościami współczynnika korelacji">>=
+corrplot(cor(CleanSpam[names]), method="number",number.cex=0.8)
+@
+
+Widzimy, że największe powiązanie występuje między zmiennymi \textit{num857} i \textit{num415} gdzie współczynnik korelacji wynosi prawie 1. Zauważalna jest również jedynie korelacja dodatnia oznaczająca, że wraz ze wzrostem wartości jednej cechy następuje wzrost wartości drugiej. 
+
+Zobaczmy jak zmienne prezentują się na skategoryzowanych wykresach rozrzutu.
+<<wykresy_rozrzutu,echo=FALSE, eval=TRUE, fig.pos="H", fig.align="center", out.extra="", fig.height=8, fig.width=10, fig.cap= "Skategoryzowane wykresy rozrzutu poszczególnych zmiennych">>=
+r1 <- ggplot(CleanSpam, aes(x = labs, y = num857, color = class)) + geom_point()
+
+r2 <- ggplot(CleanSpam, aes(x = telnet, y = num857, color = class)) + geom_point()
+
+r3 <- ggplot(CleanSpam, aes(x = num857, y = num415, color = class)) + geom_point()
+
+r4 <- ggplot(CleanSpam, aes(x = num415, y = num857, color = class)) + geom_point()
+
+r5 <- ggplot(CleanSpam, aes(x = technology, y = num857, color = class)) + geom_point()
+
+r6 <- ggplot(CleanSpam, aes(x = direct, y = num857, color = class)) + geom_point()
+
+grid.arrange(r1, r2, r3, r4, r5, r6, ncol = 2, nrow = 3)
+
+@
+Widzimy na wykresach \ref{fig:wykresy_rozrzutu}, że wraz ze wzrostem jednej obserwacji równomiernie rośnie druga obserwacja, co świadczy o dużej zależności, ale punkty też układają się pionowo, kiedy wartości obserwacji na osi $x$ osiągają $0$ lub poziomo, kiedy wartości obserwacji na osi $y$ osiągają $0$. 
+\\
+\\
+Następnie tworzymy histogramy wraz z estymatorami jądrowych gęstości dla zmiennych z najwyższym współczynnikiem korelacji, gdzie zmienną grupującą jest cecha \textit{type}.
+<<histogramy,echo=FALSE, eval=TRUE, fig.pos="H", fig.align="center", out.extra="", fig.height=16, fig.width=14, fig.cap= "Histogramy dla poszczególnych zmiennych">>=
+h1 <- ggplot(CleanSpam, aes(x=labs, fill=class)) +
+  geom_histogram( color='#e9ecef', alpha=0.6, position='identity',bins = 30) + theme(text = element_text(size = 20))
+
+h2 <- ggplot(CleanSpam, aes(x=telnet, fill=class)) +
+  geom_histogram( color='#e9ecef', alpha=0.6, position='identity',bins = 30) + theme(text = element_text(size = 20))
+
+h3 <- ggplot(CleanSpam, aes(x=num857, fill=class)) +
+  geom_histogram( color='#e9ecef', alpha=0.6, position='identity',bins = 30) + theme(text = element_text(size = 20))
+
+h4 <- ggplot(CleanSpam, aes(x=num415, fill=class)) +
+  geom_histogram( color='#e9ecef', alpha=0.6, position='identity',bins = 30) + theme(text = element_text(size = 20))
+
+h5 <- ggplot(CleanSpam, aes(x=technology, fill=class)) +
+  geom_histogram( color='#e9ecef', alpha=0.6, position='identity',bins = 30) + theme(text = element_text(size = 20))
+
+h6 <- ggplot(CleanSpam, aes(x=direct, fill=class)) +
+  geom_histogram( color='#e9ecef', alpha=0.6, position='identity',bins = 30) + theme(text = element_text(size = 20))
+
+grid.arrange(h1, h2, h3, h4, h5, h6, ncol = 2, nrow = 3)
+@
+Widzimy, na histogramach \ref{fig:histogramy}, że głównie osiągane są wartości równe $0$ oraz większą liczbę stanowi klasa \textit{class = ,,nonspam''}. Przechodzimy do tworzenia estymatorów jądrowych gęstości.
+<<estym_jadrowe_gestosci,echo=FALSE, eval=TRUE, fig.pos="H", fig.align="center", out.extra="", fig.height=16, fig.width=14, fig.cap= "Estymatory jądrowe gęstości dla poszczególnych zmiennych">>=
+e1 <- ggplot(CleanSpam, aes(x = labs, fill = class)) +
+  geom_density(alpha = 0.7) + theme(text = element_text(size = 20))
+
+e2 <- ggplot(CleanSpam, aes(x = telnet, fill = class)) +
+  geom_density(alpha = 0.7) + theme(text = element_text(size = 20))
+
+e3 <- ggplot(CleanSpam, aes(x = num857, fill = class)) +
+  geom_density(alpha = 0.7) + theme(text = element_text(size = 20))
+
+e4 <- ggplot(CleanSpam, aes(x = num415, fill = class)) +
+  geom_density(alpha = 0.7) + theme(text = element_text(size = 20))
+
+e5 <- ggplot(CleanSpam, aes(x = technology, fill = class)) +
+  geom_density(alpha = 0.7) + theme(text = element_text(size = 20))
+
+e6 <- ggplot(CleanSpam, aes(x = direct, fill = class)) +
+  geom_density(alpha = 0.7) + theme(text = element_text(size = 20))
+
+grid.arrange(e1, e2, e3, e4, e5, e6, ncol = 2, nrow = 3)
+@
+Wnioski podobne jak w przypadku histogramów, dlatego też wyniki na wykresach \ref{fig:histogramy}, \ref{fig:estym_jadrowe_gestosci} nie są zróżnicowane.
+
+Stworzymy tabelkę obrazującą jak często pojawia się wartość $0$ dla każdej zmiennej w zbiorze danych \texttt{CleanSpam}.
+
+<<wartosci_zero,echo=FALSE, eval=TRUE,results='asis'>>=
+kbl(colSums(CleanSpam==0), caption = "Ilość występowania wartości 0 dla każdej zmiennej",digits = 4,col.names = c('0')) %>% kable_styling(bootstrap_options = "striped", full_width = F, position = "center",latex_options = "HOLD_position",font_size = 7.6)
+@
+W tabeli \ref{tab:wartosci_zero} można zauważyć, że najmniej razy wartość $0$ występuje dla zmiennych \textit{you} $=1146$, \textit{capitalAve} $=216$, \textit{capitalLong} $=216$ i \textit{capitalTotal} $=7$. Wykonamy dla tych zmiennych histogramy wraz z dopasowaną gęstością normalną. 
+
+<<histogramy_gestosc,echo=FALSE, eval=TRUE,warning=FALSE, fig.pos="H", fig.align="center", out.extra="", fig.height=16, fig.width=14, fig.cap= "Histogramy wraz z dopasowaną gęstością normalną">>=
+he1 <- ggplot(CleanSpam, aes(x=you)) +  geom_histogram(aes(y=..density..), bins=60, color="black", fill="blue") + 
+  stat_function(fun=dnorm, args=list(mean=mean(CleanSpam$you), sd=sd(CleanSpam$you)), col="red", lwd=2) + theme(text = element_text(size = 20))
+
+he2 <- ggplot(CleanSpam, aes(x=capitalAve)) +  geom_histogram(aes(y=..density..), bins=60, color="black", fill="blue") + 
+  stat_function(fun=dnorm, args=list(mean=mean(CleanSpam$capitalAve), sd=sd(CleanSpam$capitalAve)), col="red", lwd=2) + theme(text = element_text(size = 20))
+
+he3 <- ggplot(CleanSpam, aes(x=capitalLong)) +  geom_histogram(aes(y=..density..), bins=60, color="black", fill="blue") + 
+  stat_function(fun=dnorm, args=list(mean=mean(CleanSpam$capitalLong), sd=sd(CleanSpam$capitalLong)), col="red", lwd=2) + theme(text = element_text(size = 20))
+
+he4 <- ggplot(CleanSpam, aes(x=capitalTotal)) +  geom_histogram(aes(y=..density..), bins=60, color="black", fill="blue") + 
+  stat_function(fun=dnorm, args=list(mean=mean(CleanSpam$capitalTotal), sd=sd(CleanSpam$capitalTotal)), col="red", lwd=2) + theme(text = element_text(size = 20))
+
+grid.arrange(he1, he2, he3, he4, ncol = 2, nrow = 2)
+@
+Widzimy, że wartości wciąż są bliskie zeru i są prawoskośnie asymetryczne. Zobaczymy jeszcze czy występują jakiekolwiek wartości odstające stosując wykresy pudełkowe dla zmiennych z najmniejszą liczbą zer, między innymi \textit{will}, \textit{,,(''}, \textit{your}, \textit{you}, \textit{all} i \textit{our},.
+
+<<wykresy_pudelkowe,echo=FALSE, eval=TRUE, fig.pos="H", fig.align="center", out.extra="", fig.height=16, fig.width=14, fig.cap= "Wykresy pudełkowe dla poszczególnych zmiennych">>=
+p1 <- ggplot(CleanSpam, aes(x = class, fill=class, y=will)) + geom_boxplot() + theme(text = element_text(size = 20))
+
+p2 <- ggplot(CleanSpam, aes(x = class, fill=class, y=your)) + geom_boxplot() + theme(text = element_text(size = 20))
+
+p3 <- ggplot(CleanSpam, aes(x = class, fill=class, y=`,,(''`)) + geom_boxplot() + theme(text = element_text(size = 20))
+
+p4 <- ggplot(CleanSpam, aes(x = class, fill=class, y=you)) + geom_boxplot() + theme(text = element_text(size = 20))
+
+p5 <- ggplot(CleanSpam, aes(x = class, fill=class, y=all)) +geom_boxplot() + theme(text = element_text(size = 20))
+
+p6 <- ggplot(CleanSpam, aes(x = class, fill=class, y=our)) + geom_boxplot() + theme(text = element_text(size = 20))
+
+grid.arrange(p1, p2, p3, p4, p5, p6, ncol = 2, nrow = 3)
+@
+Na rysunku \ref{fig:wykresy_pudelkowe} widać, że istnieje dużo wartości odstających i występują one głównie dla klasy \textit{class}$=nonspam$. Tylko dla powyższych zmiennych wykresy pudełkowe są ,,widoczne'', a dla pozostałych kontury pudełek wysmuklają się (mniej więcej tak jak w przypadku wykresu pudełkowego dla zmiennej ,,('', tylko oczywiście w mniejszym stopniu)) na poziomie równym 0 i nie widać ich tak jak jest to pokazane na \ref{fig:wykresy_pudelkowe}.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Klasyfikacja}
+Klasyfikacja to proces przypisywania obiektów do jednej z klas na podstawie ich cech. W naszym przypadku klasyfikacja będzie polegać na przewidywaniu, czy dany e-mail jest spamem czy nie. Do tego celu wykorzystamy parę metod klasyfikacji takich jak regresja liniowa, analiza dyskryminacyjna czy algorytm kNN. Naszym celem będzie wybranie metody, która radzi sobie najlepiej z ocenianiem prawdopodobieństwa przynależności do danej klasy. Aby to ocenić użyjemy różnych miar jakości takich jak dokładność, czy krzywa ROC. Pierwszym krokiem będzie podział danych na zbiór uczący i testowy w proporcji 70:30, ponieważ będzie nam to potrzebne do metod klasyfikacji.
+<<podzial_test_train, echo=TRUE, eval=TRUE>>=
+classify_data <- CleanSpam
+
+train_indices <- sample(nrow(classify_data), 0.7 * nrow(classify_data))
+train_data <- classify_data[train_indices, ]
+test_data <- classify_data[-train_indices, ]
+@
+
+\subsection{Klasyfikacja oparta na regresji liniowej}
+
+\begin{equation}
+Y = r(x) + \varepsilon = \beta_0 + \sum_{i=1}^p \beta_i x_i + \varepsilon,
+\label{eq:regression}
+\end{equation}
+W naszym przypadku użyjemy modelu regresji liniowej \ref{eq:regression}, aby wyznaczyć klasyfikator postaci
+
+\begin{equation*}
+\hat{G} = \left\{
+\begin{aligned}
+& \text{SPAM}\quad \text{jeżeli} \quad \hat{Y} > 0.5, \\
+& \text{NONSPAM}\quad \text{jeżeli} \quad \hat{Y} \leqslant 0.5,
+\end{aligned}
+\right.
+\end{equation*}
+
+\noindent gdzie $\hat{Y} = r(X) = \hat{\beta_0} + \sum_{j=1}^p X_j \hat{\beta_j}$ oznacza prognozę zmiennej zależnej $Y$, która jest wektorem zawierającym etykietki klas. Dla uproszczenia obliczeń użyjemy wbudowanej funkcji \texttt{lm()} z pakietu \texttt{stats}. W tym celu zmienimy etykietki naszych klas na 0 oraz 1, ponieważ mamy do czynienia z klasyfikacją binarną ($K = 2$).
+<<klasyfikacja_regresja_lm, echo=TRUE, eval=TRUE>>=
+# Utworzenie modelu klasyfikacji opartej na regresji liniowej
+#nearZeroVar(trainSet) - jakas fajna funkcja!!
+#findCorrelation(cor(train_data))
+train_data_lm <- train_data
+test_data_lm <- test_data
+train_data_lm$class <- ifelse(train_data$class == "spam", 1, 0)
+test_data_lm$class <- ifelse(test_data$class == "spam", 1, 0)
+
+model <- lm(class ~ ., data = train_data_lm)
+
+# Klasyfikacja danych testowych
+predictions <- predict(model, newdata = test_data_lm)
+
+# Zmiana prognozowanych wartości na klasy (spam lub non-spam)
+threshold <- 0.5
+predicted_labels <- ifelse(predictions > threshold, 1, 0)
+@
+
+\textbf{Miary jakości}
+
+<<klasyfikacja_regresja_lm_miary, echo=F, eval=TRUE>>=
+################################
+#dać miary jakości tutaj
+actual_labels <- test_data_lm$class
+
+kbl(table(predicted_labels, actual_labels), caption = "Macierz kotyngencji dla regresji liniowej",digits = 4) %>% kable_styling(bootstrap_options = "striped", full_width = F, position = "center",latex_options = "HOLD_position",font_size = 10)
+
+# Obliczenie dokładności klasyfikacji
+accuracy <- sum(predicted_labels == actual_labels) / length(actual_labels)
+cat("Accuracy:", accuracy)
+@
+
+\subsection{Klasyfikacja oparta na metodzie LDA (liniowa analiza dyskryminacyjna)}
+
+Do przeprowadzenia liniowej analizy dyskryminacyjnej użyjemy funkcji \texttt{lda()} z pakietu \texttt{MASS}. Biorąc pod uwagę model składający się ze wszystkich zmiennych oczekujemy, że dostaniemy równoważny wynik jak dla regresji liniowej, ponieważ mamy klasyfikację binarną.
+
+<<klasyfikacja_lda, echo=TRUE, eval=TRUE>>=
+lda.model <- lda(class ~ ., data = classify_data, subset=train_indices)
+#plot(lda.model)
+lda.pred <- predict(lda.model, newdata = test_data)
+class_label_lda <- lda.pred$class
+@
+
+\textbf{Miary jakości}
+
+<<klasyfikacja_lda_miary, echo=F, eval=TRUE>>=
+actual <- classify_data$class[-train_indices] # rzeczywiste etykietki dla obiektów ze zbioru testowego
+conf.mat.lda4 <- table(class_label_lda, actual) # macierz kontyngencji (Confusion matrix)
+
+kbl(conf.mat.lda4, caption = "Macierz kotyngencji dla metody lda",digits = 4) %>% kable_styling(bootstrap_options = "striped", full_width = F, position = "center",latex_options = "HOLD_position",font_size = 10)
+
+accuracy <- sum(diag(conf.mat.lda4)) / sum(conf.mat.lda4)
+cat("Accuracy:", accuracy)
+@
+
+<<klasyfikacja_lda_miary_roc, echo=F, eval=TRUE, warning = F, fig.pos="H", fig.align="center", out.extra="", fig.height=4, fig.width=6, fig.cap= "Wykres krzywej ROC dla metody lda">>=
+# obliczenie TPR i FPR dla różnych wartości threshold
+roc_obj <- roc(response = test_data$class, predictor = lda.pred$posterior[,2])
+
+# Tworzymy wykres ROC
+ggroc(roc_obj, legacy.axes = TRUE) + 
+  labs(title = "Receiver Operating Characteristic Curve",
+       x = "False Positive Rate",
+       y = "True Positive Rate")
+
+#pokolorwać pole pod AUC ale nie wiem jak
+@
+
+\subsection{Klasyfikacja z wykorzystaniem algorytmu kNN (Classification And Regression Training)}
+
+<<klasyfikacja_kNN, echo=TRUE, eval=TRUE>>=
+data  <- classify_data[-58]
+class <- classify_data$class
+
+inTrain <- createDataPartition(y=class, times=1, p=2/3, list=FALSE)
+
+# parametry:
+#       y	-- a vector of outcomes
+#   times	-- the number of partitions to create
+#      p	-- the percentage of data that goes to training set
+
+trainSet   <- data[inTrain,]
+testSet    <- data[-inTrain,]
+trainClass <- class[inTrain]
+testClass  <- class[-inTrain]
+
+prop.table(table(trainClass))
+prop.table(table(testClass))
+@
 
 \end{document}
