@@ -24,3 +24,5 @@ nrow(spam)
 
 #ile spamów i non-spamów
 table(spam$type)
+
+ncol(spam)
