@@ -1,3 +1,3 @@
 # Data-mining-project
 
-Spambase project, more information soon, stay tuned.
+All the necessary infomation regarding spambase project are located in the pdf file.
